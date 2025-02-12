@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>โอนเงิน P2P - TrueMoney Wallet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;700&display=swap');
+
+        body {
+            font-family: 'Kanit', sans-serif;
+        }
+
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-300 min-h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-lg shadow-md w-96">
+        <h1 class="text-3xl font-bold mb-6 text-center text-blue-600">โอนเงิน P2P</h1>
+
+        <div class="mb-4">
+            <label for="account" class="block text-sm font-medium text-gray-700 mb-2">เลือกบัญชี</label>
+            <select id="account"
+                class="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                <option value="" disabled selected>กรุณาเลือกบัญชี</option>
+                <option value="1">บัญชี 1 (พัชราภรณ์ พิมพิสาร)</option>
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label for="balance" class="block text-sm font-medium text-gray-700 mb-2">ยอดเงินคงเหลือ</label>
+            <input type="text" id="balance" class="w-full p-2 border border-gray-300 rounded-md bg-gray-100" readonly>
+        </div>
+
+        <div class="mb-4">
+            <label for="employeeId" class="block text-sm font-medium text-gray-700 mb-2">รหัสพนักงาน</label>
+            <input type="text" id="employeeId"
+                class="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                placeholder="กรอกรหัสพนักงาน">
+        </div>
+
+        <div class="mb-4">
+            <label for="payeeWalletId"
+                class="block text-sm font-medium text-gray-700 mb-2">เบอร์โทรผู้รับเงิน</label>
+            <input type="text" id="payeeWalletId"
+                class="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                placeholder="กรอกเบอร์โทรผู้รับเงิน">
+        </div>
+
+        <div class="mb-4">
+            <label for="amount" class="block text-sm font-medium text-gray-700 mb-2">จำนวนเงิน</label>
+            <input type="number" id="amount"
+                class="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                placeholder="กรอกจำนวนเงิน">
+        </div>
+
+        <button id="transferBtn"
+            class="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 transition duration-300">โอนเงิน</button>
+        <!-- Modal ยืนยันการโอนเงิน -->
+        <div id="confirmModal"
+            class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center">
+            <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50"></div>
+        
+            <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded shadow-lg z-50 overflow-y-auto">
+                <div class="modal-content py-4 text-left px-6">
+                    <div class="flex justify-between items-center pb-3">
+                        <p class="text-2xl font-bold">ยืนยันการโอนเงิน</p>
+                        <div class="modal-close cursor-pointer z-50">
+                            <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+                                viewBox="0 0 18 18">
+                                <path
+                                    d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z">
+                                </path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="space-y-2 mt-2">
+                        <p>คุณต้องการโอนเงินตามรายละเอียดดังนี้:</p>
+                        <div class="bg-gray-50 p-4 rounded-md space-y-1">
+                            <p><span class="font-medium">จำนวนเงิน:</span> <span id="confirmAmount"></span> บาท</p>
+                            <p><span class="font-medium">เบอร์ผู้รับ:</span> <span id="confirmPhone"></span></p>
+                            <p><span class="font-medium">ชื่อผู้รับ:</span> <span id="confirmName"></span></p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end pt-4 space-x-3">
+                        <button id="cancelTransferBtn"
+                            class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">ยกเลิก</button>
+                        <button id="confirmTransferBtn"
+                            class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600">ยืนยันการโอนเงิน</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+
+    <!-- Modal -->
+    <div id="modal"
+        class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center">
+        <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50"></div>
+
+        <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded shadow-lg z-50 overflow-y-auto">
+            <div class="modal-content py-4 text-left px-6">
+                <div class="flex justify-between items-center pb-3">
+                    <p class="text-2xl font-bold" id="modal-title"></p>
+                    <div class="modal-close cursor-pointer z-50">
+                        <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+                            viewBox="0 0 18 18">
+                            <path
+                                d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z">
+                            </path>
+                        </svg>
+                    </div>
+                </div>
+                <div id="modal-body" class="text-center">
+                    <!-- Content will be inserted here -->
+                </div>
+                <div class="flex justify-center pt-4">
+                    <button id="modal-button"
+                        class="px-4 bg-transparent p-3 rounded-lg text-indigo-500 hover:bg-gray-100 hover:text-indigo-400 mr-2">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const accounts = {
+            '1': {
+                tmn_key_id: '10853',
+                mobile_number: '0809811781',
+                login_token: 'L-28dda1e5-9626-4b2b-9f51-7ad649bb1a42',
+                pin: '365789',
+                tmn_id: 'tmn.10126882882'
+            },
+            '2': {
+                tmn_key_id: '00000',
+                mobile_number: '00000',
+                login_token: '00000',
+                pin: '00000',
+                tmn_id: 'tmn.00000'
+            }
+        };
+
+        const accountSelect = document.getElementById('account');
+        const balanceInput = document.getElementById('balance');
+        const employeeIdInput = document.getElementById('employeeId');
+        const payeeWalletIdInput = document.getElementById('payeeWalletId');
+        const amountInput = document.getElementById('amount');
+        const transferBtn = document.getElementById('transferBtn');
+        // ดักจับการกรอกข้อมูลและลบขีด
+        payeeWalletIdInput.addEventListener('input', function () {
+            // ลบขีดทั้งหมดออกจากเบอร์โทรศัพท์
+            this.value = this.value.replace(/-/g, '');
+        });
+        async function fetchAPI(action, data) {
+            try {
+                const response = await fetch('process_transfer.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ ...data, action: action })
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.message);
+                }
+                return result;
+            } catch (error) {
+                console.error('Error:', error);
+                throw error;
+            }
+        }
+
+        function showLoader() {
+            const modal = document.getElementById('modal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.querySelector('#modal-title').textContent = 'กำลังดำเนินการ';
+            modal.querySelector('#modal-body').innerHTML = '<div class="loader mx-auto"></div>';
+            modal.querySelector('#modal-button').style.display = 'none';
+        }
+
+        function hideLoader() {
+            const modal = document.getElementById('modal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function showModal(title, message, isSuccess) {
+            const modal = document.getElementById('modal');
+            const iconClass = isSuccess ? 'text-green-500' : 'text-red-500';
+            const icon = isSuccess ? '✓' : '✗';
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.querySelector('#modal-title').textContent = title;
+            modal.querySelector('#modal-body').innerHTML = `
+        <div class="${iconClass} text-5xl mb-4">${icon}</div>
+        <p>${message}</p>
+    `;
+            modal.querySelector('#modal-button').style.display = 'block';
+            modal.querySelector('#modal-button').textContent = isSuccess ? 'OK' : 'ลองอีกครั้ง';
+        }
+
+        async function updateBalance() {
+            const selectedAccount = accounts[accountSelect.value];
+            if (!selectedAccount) {
+                balanceInput.value = '';
+                return;
+            }
+            try {
+                const result = await fetchAPI('getBalance', selectedAccount);
+                balanceInput.value = result.balance + ' บาท';
+            } catch (error) {
+                showModal('ข้อผิดพลาด', 'ไม่สามารถดึงข้อมูลยอดเงินได้: ' + error.message, false);
+            }
+        }
+
+        accountSelect.addEventListener('change', updateBalance);
+
+        document.querySelector('.modal-close').addEventListener('click', hideLoader);
+        document.getElementById('modal-button').addEventListener('click', hideLoader);
+
+
+        function showConfirmModal() {
+            const modal = document.getElementById('confirmModal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function hideConfirmModal() {
+            const modal = document.getElementById('confirmModal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        // แก้ไข event listener ของปุ่มโอนเงิน
+        transferBtn.addEventListener('click', async () => {
+            const selectedAccount = accounts[accountSelect.value];
+            const employeeId = employeeIdInput.value;
+            const payeeWalletId = payeeWalletIdInput.value;
+            const amount = amountInput.value;
+
+            if (!selectedAccount || !employeeId || !payeeWalletId || !amount || isNaN(amount) || amount <= 0) {
+                showModal('ข้อผิดพลาด', 'กรุณากรอกข้อมูลให้ครบถ้วนและถูกต้อง', false);
+                return;
+            }
+
+            showLoader();
+            try {
+                // ดึงชื่อผู้รับเงิน
+                const nameResult = await fetchAPI('getRecipientName', {
+                    ...selectedAccount,
+                    payee_wallet_id: payeeWalletId
+                });
+                hideLoader();
+
+                // แสดงข้อมูลในหน้ายืนยัน
+                document.getElementById('confirmAmount').textContent = parseFloat(amount).toFixed(2);
+                document.getElementById('confirmPhone').textContent = payeeWalletId;
+                document.getElementById('confirmName').textContent = nameResult.recipient_name;
+                showConfirmModal();
+
+                // เพิ่ม event listener สำหรับปุ่มยืนยันและยกเลิก
+                document.getElementById('confirmTransferBtn').onclick = async () => {
+                    hideConfirmModal();
+                    showLoader();
+                    try {
+                        const result = await fetchAPI('transfer', {
+                            ...selectedAccount,
+                            employee_id: employeeId,
+                            payee_wallet_id: payeeWalletId,
+                            amount: amount
+                        });
+                        hideLoader();
+                        showModal('สำเร็จ', result.message, true);
+                        updateBalance();
+
+                        // เคลียร์ข้อมูลในช่องหลังจากโอนสำเร็จ
+                        payeeWalletIdInput.value = '';
+                        amountInput.value = '';
+                    } catch (error) {
+                        hideLoader();
+                        let errorMessage = error.message;
+                        if (errorMessage.includes('TRC-4011')) {
+                            errorMessage = 'หมายเลขโทรศัพท์หรือ Wallet ID ไม่ถูกต้อง';
+                        } else if (errorMessage.includes('TRC-1001')) {
+                            errorMessage = 'ยอดเงินคงเหลือไม่เพียงพอ';
+                        } else if (errorMessage.includes('TRC-55408')) {
+                            errorMessage = 'ไม่สามารถทำรายการได้ในขณะนี้ <br> Sorry, transaction right now. (R)';
+                        } else if (errorMessage.includes('TRC-888')) {
+                            errorMessage = 'รายการถอนซ้ำ';
+                        }
+                        showModal('ข้อผิดพลาด', errorMessage, false);
+                    }
+                };
+
+                document.getElementById('cancelTransferBtn').onclick = hideConfirmModal;
+                document.querySelector('#confirmModal .modal-close').onclick = hideConfirmModal;
+
+            } catch (error) {
+                hideLoader();
+                showModal('ข้อผิดพลาด', 'ไม่สามารถดึงข้อมูลผู้รับเงินได้', false);
+            }
+        });
+
+        // เริ่มต้นโดยไม่แสดงยอดเงิน
+        balanceInput.value = '';
+    </script>
+</body>
+
+</html>

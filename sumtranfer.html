@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สรุปข้อมูลการโอนเงิน</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;700&display=swap');
+
+        body {
+            font-family: 'Kanit', sans-serif;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #e2e8f0;
+            padding: 8px;
+        }
+
+        th {
+            background-color: #f8fafc;
+            font-weight: 500;
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 p-4">
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading">
+        <div class="loading-content">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            กำลังโหลดข้อมูล...
+        </div>
+    </div>
+
+    <div class="container mx-auto max-w-7xl">
+        <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">สรุปข้อมูลการโอนเงิน</h1>
+
+        <!-- Search Form -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="flex flex-col">
+                    <label for="startDate" class="mb-1 text-gray-600">วันที่เริ่มต้น</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="startDate" class="border rounded px-3 py-2 w-full">
+                        <input type="time" id="startTime" class="border rounded px-3 py-2">
+                    </div>
+                </div>
+
+                <div class="flex flex-col">
+                    <label for="endDate" class="mb-1 text-gray-600">วันที่สิ้นสุด</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="endDate" class="border rounded px-3 py-2 w-full">
+                        <input type="time" id="endTime" class="border rounded px-3 py-2">
+                    </div>
+                </div>
+
+                <div class="flex items-end">
+                    <button id="searchBtn"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg w-full transition duration-200">
+                        ค้นหา
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Employee Summary Table -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">สรุปยอดรวมตามพนักงาน</h2>
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="text-left">ชื่อพนักงาน</th>
+                            <th class="text-right">ยอดรวม</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employeeSummary"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Transfer Log Table -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">รายการโอนเงิน</h2>
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>เบอร์โทรศัพท์</th>
+                            <th>ชื่อลูกค้า</th>
+                            <th class="text-right">จำนวนเงิน</th>
+                            <th>วันที่และเวลา</th>
+                            <th>พนักงาน</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transferLog"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-center gap-4 mb-6">
+            <button id="prevBtn"
+                class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition duration-200">
+                ก่อนหน้า
+            </button>
+            <div id="pageInfo" class="flex items-center px-4 bg-white rounded-lg shadow">
+                หน้า 1
+            </div>
+            <button id="nextBtn"
+                class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition duration-200">
+                ถัดไป
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        let totalPages = 0;
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Initialize Flatpickr
+            flatpickr("#startDate", {
+                dateFormat: "d/m/Y",
+                locale: "th",
+                defaultDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            });
+
+            flatpickr("#endDate", {
+                dateFormat: "d/m/Y",
+                locale: "th",
+                defaultDate: new Date()
+            });
+
+            // Set default time values
+            document.getElementById('startTime').value = '00:00';
+            document.getElementById('endTime').value = '23:59';
+
+            // Add event listeners
+            document.getElementById('searchBtn').addEventListener('click', () => {
+                currentPage = 0;
+                fetchData();
+            });
+
+            document.getElementById('prevBtn').addEventListener('click', () => {
+                if (currentPage > 0) {
+                    currentPage--;
+                    fetchData();
+                }
+            });
+
+            document.getElementById('nextBtn').addEventListener('click', () => {
+                if (currentPage < totalPages - 1) {
+                    currentPage++;
+                    fetchData();
+                }
+            });
+
+            // Initial data load
+            fetchData();
+        });
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        async function fetchData() {
+            showLoading();
+            try {
+                const startDate = document.getElementById('startDate').value;
+                const startTime = document.getElementById('startTime').value;
+                const endDate = document.getElementById('endDate').value;
+                const endTime = document.getElementById('endTime').value;
+
+                const startDateTime = convertToISOString(startDate, startTime);
+                const endDateTime = convertToISOString(endDate, endTime);
+
+                const response = await fetch(
+                    `sumtranfer.php?startDate=${startDateTime}&endDate=${endDateTime}&page=${currentPage}`
+                );
+                const data = await response.json();
+
+                if (data.success) {
+                    updateEmployeeSummary(data.employeeSummary);
+                    updateTransferLog(data.transferLog);
+                    updatePagination(data.currentPage, data.totalPages);
+                } else {
+                    throw new Error(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูล');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`เกิดข้อผิดพลาด: ${error.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function convertToISOString(date, time) {
+            if (!date) return '';
+            const [day, month, year] = date.split('/');
+            const [hours, minutes] = time ? time.split(':') : ['00', '00'];
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${hours}:${minutes}:00`;
+        }
+
+        function updateEmployeeSummary(summary) {
+            const tbody = document.getElementById('employeeSummary');
+            tbody.innerHTML = '';
+
+            let totalAmount = 0;
+
+            summary.forEach(item => {
+                totalAmount += parseFloat(item.total_amount);
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-2">${item.employee_name}</td>
+                        <td class="p-2 text-right">${parseFloat(item.total_amount).toLocaleString()} บาท</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+
+            const totalRow = `
+                <tr class="font-bold bg-gray-100">
+                    <td class="p-2">ยอดรวมทั้งหมด</td>
+                    <td class="p-2 text-right">${totalAmount.toLocaleString()} บาท</td>
+                </tr>
+            `;
+            tbody.innerHTML += totalRow;
+        }
+
+        function updateTransferLog(log) {
+            const tbody = document.getElementById('transferLog');
+            tbody.innerHTML = '';
+
+            log.forEach(item => {
+                const date = new Date(item.date_time);
+                const formattedDate = `${date.toLocaleDateString('th-TH')} ${date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`;
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-2">${item.phonenumber}</td>
+                        <td class="p-2">${item.customername || '-'}</td>
+                        <td class="p-2 text-right">${parseFloat(item.amount).toLocaleString()} บาท</td>
+                        <td class="p-2">${formattedDate}</td>
+                        <td class="p-2">${item.employee_name}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        function updatePagination(page, total) {
+            currentPage = page;
+            totalPages = total;
+
+            document.getElementById('pageInfo').textContent = `หน้า ${page + 1} จาก ${total}`;
+            document.getElementById('prevBtn').disabled = page === 0;
+            document.getElementById('nextBtn').disabled = page >= total - 1;
+        }
+    </script>
+</body>
+
+</html>

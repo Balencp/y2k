@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบถอนเงินอัตโนมัติ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.7/axios.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;700&display=swap');
+
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #111827;
+            color: white;
+        }
+
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: #1f2937;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+        }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .reset-button {
+            background-color: #ef4444;
+            transition: background-color 0.2s;
+        }
+
+        .reset-button:hover {
+            background-color: #dc2626;
+        }
+    </style>
+</head>
+
+<body class="p-4">
+    <div class="max-w-7xl mx-auto">
+        <!-- Transfer Confirmation Modal -->
+        <div id="transferModal" class="modal" style="display: none;">
+            <div class="modal-content bg-gray-800 text-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-lg font-bold mb-4">ยืนยันการทำรายการ</h2>
+
+                <!-- Employee ID Input -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-400">รหัสพนักงาน</label>
+                    <input type="text" id="employeeId"
+                        class="mt-1 block w-full rounded bg-gray-800 border-gray-700 text-white px-3 py-2">
+                </div>
+
+                <!-- Transfer Details -->
+                <div id="confirmationDetails" class="text-sm text-gray-300">
+                    <!-- Transfer details will be populated here -->
+                </div>
+
+                <!-- Timer -->
+                <div id="timer" class="text-sm text-red-500 mt-2 hidden">
+                    กรุณารอ <span id="countdown">5</span> วินาที ก่อนยืนยันการทำรายการ
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="mt-4 flex justify-end space-x-2">
+                    <button onclick="hideTransferModal()"
+                        class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">ยกเลิก</button>
+                    <button id="confirmButton" onclick="confirmTransfer()"
+                        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 ml-2 rounded"
+                        disabled>ยืนยัน</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Modal -->
+        <div id="errorModal" class="modal">
+            <div class="modal-content bg-gray-800 text-white p-6 rounded-lg shadow-lg max-w-lg mx-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-red-500">
+                        <i class="fas fa-exclamation-circle mr-2"></i>
+                        เกิดข้อผิดพลาด
+                    </h2>
+                    <button onclick="hideErrorModal()" class="text-gray-400 hover:text-white">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="errorMessage" class="text-sm text-gray-300 space-y-2">
+                    <!-- Error message will be populated here -->
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button onclick="hideErrorModal()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">
+                        ปิด
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Header Section -->
+        <div class="flex justify-between items-center mb-6">
+            <div class="flex items-center space-x-2">
+                <i class="fas fa-exchange-alt text-blue-500"></i>
+                <h1 class="text-2xl font-bold text-white">ระบบถอนเงินอัตโนมัติ</h1>
+            </div>
+            <button onclick="resetSystem()"
+                class="reset-button px-4 py-2 rounded text-white flex items-center space-x-2">
+                <i class="fas fa-sync"></i>
+                <span>รีเซ็ตระบบ</span>
+            </button>
+        </div>
+
+        <!-- Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <!-- Account Selection -->
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span>Account</span>
+                    </div>
+                    <select id="accountSelect"
+                        class="bg-gray-700 text-white px-3 py-1 rounded-md focus:ring-blue-500 focus:ring-1 outline-none">
+                        <option value="" disabled selected>เลือกบัญชี</option>
+                        <option value="1">บัญชี 1 (วีรพงษ์ วันเต็ม)</option>
+                        <option value="2">บัญชี 2 (สุนิตา เพชรกระจาย)</option>
+                        <!-- เพิ่มบัญชีอื่นๆ ตามต้องการ -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Balance -->
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>Balance</span>
+                    </div>
+                    <span class="text-green-400" id="balance">-</span>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        <span>Status</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="bg-green-500 px-2 py-1 rounded text-sm" id="status">Ready</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Warning Message -->
+        <div class="bg-yellow-900/20 border border-yellow-600 p-4 rounded-lg mb-4 flex items-start space-x-2">
+            <i class="fas fa-exclamation-triangle text-yellow-600 mt-1"></i>
+            <span>ตรวจสอบยอดถอนทุกครั้งก่อนโอน</span>
+        </div>
+
+        <!-- Timer and Refresh -->
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center space-x-4">
+                <span class="text-gray-400">ยังเหลือล่าสุด: <span id="timeLeft">00:15:25</span></span>
+                <span id="lastUpdate" class="text-gray-400"></span>
+            </div>
+            <button onclick="refreshData()"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                <i class="fas fa-sync-alt"></i>
+                <span>Refresh</span>
+            </button>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loader"></div>
+        </div>
+
+        <!-- Table Section -->
+        <div class="overflow-x-auto bg-gray-900 rounded-lg shadow">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-800">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-yellow-500 uppercase">ลำดับที่</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-yellow-500 uppercase">ผู้ใช้งาน</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-yellow-500 uppercase">ธนาคาร</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-yellow-500 uppercase">บัญชี</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-yellow-500 uppercase">จำนวนเงิน</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-yellow-500 uppercase">เวลายืนยัน</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-yellow-500 uppercase">ยอดถอนสูงสุด</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-yellow-500 uppercase">
+                            จำนวนเงินที่ต้องการถอน</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-yellow-500 uppercase">ยืนยัน</th>
+                    </tr>
+                </thead>
+                <tbody id="withdrawalTableBody">
+                    <!-- Data will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="modal">
+        <div class="modal-content text-center">
+            <h2 class="text-xl mb-4">กำลังดำเนินการ</h2>
+            <div class="loader"></div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">ยืนยันการถอนเงิน</h2>
+                <button onclick="hideConfirmModal()" class="text-gray-400 hover:text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-400">รหัสพนักงาน</label>
+                    <input type="text" id="employeeId"
+                        class="mt-1 block w-full rounded bg-gray-800 border-gray-700 text-white px-3 py-2">
+                </div>
+                <div id="confirmationDetails" class="bg-gray-700 p-4 rounded">
+                    <!-- Details will be populated by JavaScript -->
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button onclick="hideConfirmModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+                    ยกเลิก
+                </button>
+                <button onclick="processWithdrawal()"
+                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+                    ยืนยัน
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Modal -->
+    <div id="progressModal" class="modal">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4">กำลังดำเนินการโอนเงิน</h2>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-400">ความคืบหน้า</span>
+                    <span id="progressPercentage" class="text-sm font-semibold text-blue-500">0%</span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-2">
+                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style="width: 0%">
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2 text-gray-400">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span id="progressStatus" class="text-sm">กำลังเตรียมการโอน...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Modal -->
+    <div id="resultModal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">ผลการโอนเงิน</h2>
+                <button onclick="closeResultModal()" class="text-gray-400 hover:text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="transferResult" class="space-y-4">
+                <!-- Results will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Define multiple API configurations
+        const API_CONFIGS = {
+            A: {
+                url: 'https://superslotwallet-backend.jwallet.link',
+                token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NzlmNWFjNDFmNGVkZTdiYWQ3Mzg4MTQiLCJwYXNzd29yZCI6IiQyYiQxMiRTWThzZ3FBRDkyS2ZITVJJbDNldzllZlBuLmY0cUVud3JUSGJ5Yy4xTHR5NFB5NjduRGpVVyIsImF1dGhvcml0eSI6IkFETUlOIiwicm9sZXMiOlsid2FpdGluZy10cmFuc2ZlciIsImRhc2hib2FyZCJdLCJleHRyYVJvbGVzIjpbXSwiZW5hYmxlQmlsbGluZyI6dHJ1ZSwiaWF0IjoxNzM4NDk3MzMxfQ.YniEw1Tzh6osCoTiJHrldHXScbHTiUgtVBxwWdWxGkI',
+                name: 'SSW'
+            },
+            B: {
+                url: '',
+                token: '..MymgGKTR3-',
+                name: ''
+            }
+        };
+        let currentWithdrawal = null;
+        // เพิ่มฟังก์ชันตรวจสอบระบบค้าง
+        let processingTimeout;
+        let isProcessing = false;
+
+
+
+
+
+
+        function startProcessingTimer() {
+            isProcessing = true;
+            processingTimeout = setTimeout(() => {
+                if (isProcessing) {
+                    showSystemStuck();
+                }
+            }, 30000); // 30 วินาที
+        }
+
+        function clearProcessingTimer() {
+            clearTimeout(processingTimeout);
+            isProcessing = false;
+        }
+
+        function showSystemStuck() {
+            document.getElementById('status').textContent = 'Stuck';
+            document.getElementById('status').className = 'bg-red-500 px-2 py-1 rounded text-sm';
+            document.getElementById('resetBtn').classList.remove('hidden');
+            document.getElementById('stuckModal').style.display = 'block';
+        }
+        // Account configuration
+        const accounts = {
+            '1': {
+                tmn_key_id: 'x437b095d7b',
+                mobile_number: '0962266937',
+                login_token: 'L-314f6daf-74e2-454e-9aa3-e57332c74664',
+                pin: '060662',
+                tmn_id: 'tmn.10125434215'
+            },
+            '2': {
+                tmn_key_id: '10519',
+                mobile_number: '0640254545',
+                login_token: 'L-1db6492d-ab86-42d1-bce5-c80119f0887e',
+                pin: '182541',
+                tmn_id: 'tmn.10104394668'
+            }
+        };
+
+        let currentAccount = null;
+        async function getBalance(accountData) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/admin/balance`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'applcation/json',
+                        'Authorization': `Bearer ${AUTH_TOKEN}`
+                    },
+                    body: JSON.stringify({
+                        action: 'getBalance',
+                        ...accountData
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const balance = data.balance;
+                    document.getElementById('balance').textContent = formatNumber(balance);
+                    return balance;
+                } else {
+                    throw new Error(data.message || 'Error getting balance');
+                }
+            } catch (error) {
+                console.error('Error getting balance:', error);
+                document.getElementById('balance').textContent = 'Error';
+                throw error; // Re-throw เพื่อให้ caller จัดการ error ได้
+            }
+        }
+
+
+        // Function to fetch data from all APIs
+        async function fetchAllWithdrawals() {
+            try {
+                const allPromises = Object.entries(API_CONFIGS).map(async ([key, config]) => {
+                    try {
+                        const response = await fetch(`${config.url}/api/admin/transfer/waiting`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${config.token}`
+                            },
+                            body: JSON.stringify({
+                                page: 1,
+                                limit: 20,
+                                sort: "-createdAt"
+                            })
+                        });
+
+                        if (!response.ok) throw new Error(`Network response was not ok for ${config.name}`);
+                        const data = await response.json();
+
+                        // Add source information to each statement
+                        const statements = data.statements.map(statement => ({
+                            ...statement,
+                            source: {
+                                api: key,
+                                name: config.name,
+                                url: config.url,
+                                token: config.token
+                            }
+                        }));
+
+                        return statements;
+                    } catch (error) {
+                        console.error(`Error fetching from ${config.name}:`, error);
+                        return [];
+                    }
+                });
+
+                // Wait for all API calls to complete
+                const results = await Promise.all(allPromises);
+                // Combine and sort all results
+                const allStatements = results
+                    .flat()
+                    .filter(statement => statement.bank && statement.bank.nameEN === "Truewallet")
+                    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+                return allStatements;
+            } catch (error) {
+                console.error('Error fetching all withdrawals:', error);
+                return [];
+            }
+        }
+
+
+        // ฟังก์ชันใหม่สำหรับเรียก API
+        async function fetchAPI(action, data) {
+            try {
+                const response = await fetch('process_transfer.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ ...data, action: action })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.message);
+                }
+
+                return result;
+            } catch (error) {
+                console.error('Error:', error);
+                throw error;
+            }
+        }
+
+        async function updateBalance() {
+            const selectedAccount = accounts[accountSelect.value];
+            if (!selectedAccount) {
+                document.getElementById('balance').textContent = '-';
+                return;
+            }
+
+            try {
+                showLoadingModal();
+                const result = await fetchAPI('getBalance', selectedAccount);
+                document.getElementById('balance').textContent = result.balance + ' บาท';
+            } catch (error) {
+                console.error('Error getting balance:', error);
+                document.getElementById('balance').textContent = 'Error';
+                showModal('ข้อผิดพลาด', 'ไม่สามารถดึงข้อมูลยอดเงินได้: ' + error.message, false);
+            } finally {
+                hideLoadingModal();
+            }
+        }
+
+        // เพิ่ม Event Listener สำหรับการเลือกบัญชี
+        // เพิ่มการตรวจสอบและกำหนดค่า currentAccount เมื่อเลือกบัญชี
+        document.getElementById('accountSelect').addEventListener('change', function () {
+            const selectedAccount = this.value;
+            currentAccount = accounts[selectedAccount];
+            updateBalance();
+        });
+        function showModal(title, message, isSuccess) {
+            const modal = document.getElementById('modal');
+            const iconClass = isSuccess ? 'text-green-500' : 'text-red-500';
+            const icon = isSuccess ? '✓' : '✗';
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.querySelector('#modal-title').textContent = title;
+            modal.querySelector('#modal-body').innerHTML = `
+                <div class="${iconClass} text-5xl mb-4">${icon}</div>
+                <p>${message}</p>
+            `;
+            modal.querySelector('#modal-button').style.display = 'block';
+            modal.querySelector('#modal-button').textContent = isSuccess ? 'OK' : 'ลองอีกครั้ง';
+        }
+
+        function resetSystem() {
+            showLoadingModal();
+            setTimeout(async () => {
+                try {
+                    // เรียก API รีเซ็ตระบบ
+                    const response = await fetch(`${API_URL}/api/admin/transfer/reset`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${AUTH_TOKEN}`
+                        }
+                    });
+
+                    if (!response.ok) throw new Error('ไม่สามารถรีเซ็ตระบบได้');
+
+                    clearProcessingTimer();
+                    document.getElementById('status').textContent = 'Ready';
+                    document.getElementById('status').className = 'bg-green-500 px-2 py-1 rounded text-sm';
+                    document.getElementById('resetBtn').classList.add('hidden');
+                    document.getElementById('stuckModal').style.display = 'none';
+                    await refreshData();
+                } catch (error) {
+                    console.error('Error resetting system:', error);
+                    alert('ไม่สามารถรีเซ็ตระบบได้ กรุณาลองใหม่อีกครั้ง');
+                } finally {
+                    hideLoadingModal();
+                }
+            }, 2000);
+        }
+        // เพิ่มฟังก์ชัน fetchWithdrawals ใหม่
+        async function fetchWithdrawals() {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/transfer/waiting`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${AUTH_TOKEN}`
+                    },
+                    body: JSON.stringify({
+                        page: 1,
+                        limit: 20,
+                        sort: "-createdAt"
+                    })
+                });
+
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+
+                // กรองรายการที่ไม่ใช่ Truewallet ออก
+                const filteredStatements = data.statements.filter(statement =>
+                    statement.bank && statement.bank.nameEN === "Truewallet"
+                );
+
+                return filteredStatements || [];
+            } catch (error) {
+                console.error('Error fetching withdrawals:', error);
+                return [];
+            }
+        }
+
+        function formatDateTime(isoString) {
+            const date = new Date(isoString);
+            const year = date.getFullYear() + 543; // Convert to Buddhist Era
+            return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${year} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
+        }
+
+        function formatNumber(num) {
+            return Number(num).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        function showLoadingModal() {
+            document.getElementById('loadingModal').style.display = 'block';
+        }
+
+        function hideLoadingModal() {
+            document.getElementById('loadingModal').style.display = 'none';
+        }
+
+        function showConfirmModal(withdrawal) {
+            currentWithdrawal = withdrawal;
+            document.getElementById('confirmAmount').textContent = formatNumber(withdrawal.requestAmount);
+            document.getElementById('confirmAccount').textContent = `${withdrawal.bankAccountNo} (${withdrawal.bankAccountName})`;
+            document.getElementById('confirmBank').textContent = withdrawal.bank.nameTH;
+            document.getElementById('confirmUsername').textContent = withdrawal.user.name;
+            document.getElementById('confirmModal').style.display = 'block';
+        }
+
+        function hideConfirmModal() {
+            document.getElementById('confirmModal').style.display = 'none';
+            currentWithdrawal = null;
+        }
+
+        // แก้ไขการเรียก API ให้ใช้ path ที่ถูกต้อง
+        async function verifyEmployee(employeeId) {
+            if (!employeeId) return false;
+
+            try {
+                const response = await axios.get(`/check-employee/${employeeId}`); // ลบ BASE_URL ออก
+                return response.data.status === 'success';
+            } catch (error) {
+                console.error('Error verifying employee:', error);
+                return false;
+            }
+        }
+        // โค้ดส่วนที่แสดง badge ในฟังก์ชัน updateWithdrawalTable
+        function getServerBadgeClass(serverName) {
+            // ถ้าเป็น Server B ให้ใช้สีน้ำเงิน
+            if (serverName.toLowerCase().includes('b')) {
+                return 'bg-blue-500 text-white';
+            }
+            // ถ้าเป็น Server อื่นๆ ให้ใช้กรอบสีแดง
+            return 'bg-transparent border-2 border-red-500 text-red-500';
+        }
+        // แก้ไขฟังก์ชัน updateWithdrawalTable
+        // แก้ไขฟังก์ชัน updateWithdrawalTable
+        function updateWithdrawalTable(withdrawals) {
+            const tableBody = document.getElementById('withdrawalTableBody');
+            tableBody.innerHTML = '';
+
+            withdrawals.forEach((withdrawal, index) => {
+                // แสดงเฉพาะ Truewallet
+                if (withdrawal.bank && withdrawal.bank.nameEN === "Truewallet") {
+                    const row = document.createElement('tr');
+                    row.className = 'data-row hover:bg-gray-800';
+                    const serverBadgeClass = withdrawal.source.name.toLowerCase().includes('b')
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-transparent border border-red-500 text-red-500';
+                    const amount = parseFloat(withdrawal.requestAmount).toLocaleString('th-TH', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    });
+
+                    const withdrawalLimit = withdrawal.limitWithdraw > 0 ? withdrawal.limitWithdraw.toFixed(2) : 'กรอกจำนวนเงิน';
+                    const historyUrl = `userlist.html?username=${withdrawal.user.username}&source=${withdrawal.source.api}`;
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">${index + 1}</td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-medium text-white">
+                                ${withdrawal.user.name}
+                                <span class="ml-1 px-1.5 py-0.5 text-[10px] leading-none rounded ${serverBadgeClass}">
+                                    ${withdrawal.source.name}
+                                </span>
+                            </div>
+                            <div class="text-sm text-gray-400">
+                                <a href="${historyUrl}" 
+                                target="_blank"
+                                class="text-blue-400 hover:text-blue-300 underline cursor-pointer">
+                                    ${withdrawal.bankAccountNo}
+                                </a>
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                <span class="text-yellow-400">ฝาก: ${withdrawal.user.statDeposit || 0} บิล</span> | 
+                                <span class="text-red-400">ถอน: ${withdrawal.user.statWithdraw || 0} บิล</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-white">${withdrawal.bank.nameEN}</div>
+                            <div class="text-sm text-gray-400">${withdrawal.bank.nameTH}</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-white">${withdrawal.bankAccountNo}</div>
+                            <div class="text-sm text-gray-400">${withdrawal.bankAccountName}</div>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-green-400 font-medium">${amount}</td>
+                        <td class="px-6 py-4 text-sm text-gray-300">${formatDateTime(withdrawal.createdAt)}</td>
+                        <td class="px-6 py-4 text-sm text-gray-400">
+                            ${withdrawalLimit}
+                        </td>
+                        <td class="px-6 py-4">
+                            <input
+                                type="text"
+                                id="withdrawal-${withdrawal._id}" 
+                                value="${withdrawal.limitWithdraw > 0 ? withdrawal.limitWithdraw.toFixed(2) : ''}"
+                                class="w-full px-2 py-1 bg-gray-700 text-white rounded"
+                                placeholder="จำนวนเงิน"
+                                ${withdrawal.limitWithdraw > 0 ? 'readonly' : ''}
+                            >
+                        </td>
+                        <td class="px-6 py-4 space-x-2">
+                            <button
+                                onclick="
+                                    const inputField = document.getElementById('withdrawal-${withdrawal._id}');
+                                    const updatedAmount = inputField ? parseFloat(inputField.value) : null;
+                                    const maxAmount = ${withdrawal.requestAmount};
+
+                                    if (!updatedAmount || updatedAmount <= 0) {
+                                        alert('กรุณากรอกจำนวนเงินที่ต้องการถอนให้ถูกต้อง');
+                                        return;
+                                    }
+
+                                    if (updatedAmount > maxAmount) {
+                                        alert('จำนวนเงินที่กรอกห้ามเกินยอดที่ลูกค้าแจ้งมา');
+                                        return;
+                                    }
+
+                                    showTransferModal('${withdrawal._id}', updatedAmount, '${withdrawal.bank.nameTH}', '${withdrawal.bankAccountNo}', '${withdrawal.bankAccountName}', ${withdrawal.limitWithdraw},'${withdrawal.source.api}');
+                                " 
+                                class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
+                                โอน Auto
+                            </button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                }
+            });
+
+            // อัพเดทจำนวนรายการที่รอดำเนินการ
+            updatePendingCount(withdrawals.filter(w => w.bank && w.bank.nameEN === "Truewallet").length);
+        }
+        // ในส่วนที่เปิดหน้าประวัติ (หน้าแรก)
+        function openHistory(username, source) { // รับ username โดยตรง ไม่ใช่ userData object
+            // ดูว่า server ไหนโดยเช็คจาก URL ที่ใช้
+            let apiSource = 'A'; // ค่าเริ่มต้นเป็น A
+
+            // ตรวจสอบว่าเป็น URL ของ server ไหน
+            if (window.location.href.includes('balencking-backend')) {
+                apiSource = 'B';
+            }
+
+            // ตรวจสอบว่ามี username หรือไม่
+            if (!username) {
+                console.error('Username is required');
+                return;
+            }
+
+            const historyUrl = `userlist.html?username=${encodeURIComponent(username)}&source=${apiSource}`;
+            window.open(historyUrl, '_blank');
+        }
+        // ฟังก์ชันสำหรับเลือก API URL และ TOKEN ที่ถูกต้อง
+        function getAPIConfig(type) {
+            return API_CONFIGS[type] || null;
+        }
+        async function confirmTransfer() {
+            const employeeId = document.getElementById('employeeId').value;
+
+            if (!employeeId) {
+                showErrorModal('กรุณากรอกรหัสพนักงาน');
+                return;
+            }
+
+            if (!currentAccount || !currentTransferData) {
+                showErrorModal('ข้อมูลไม่ครบถ้วน / ยังไม่ได้เลือกบัญชี');
+                return;
+            }
+
+
+            // เลือก API Config จาก source ของ currentTransferData
+            const selectedAPIType = currentTransferData.source
+                ? currentTransferData.source.api
+                : 'A'; // ค่า default เป็น 'A' หากไม่มี source
+            console.log('Approve URL:', selectedAPIType);
+            const selectedAPI = API_CONFIGS[selectedAPIType];
+
+            if (!selectedAPI) {
+                showErrorModal('ไม่พบการตั้งค่า API ที่ถูกต้อง');
+                return;
+            }
+
+            try {
+                showLoadingModal();
+
+                // 1. ทำการโอนเงิน
+                const formData = new FormData();
+                formData.append('action', 'transfer');
+                formData.append('employee_id', employeeId);
+                formData.append('tmn_key_id', currentAccount.tmn_key_id);
+                formData.append('mobile_number', currentAccount.mobile_number);
+                formData.append('login_token', currentAccount.login_token);
+                formData.append('pin', currentAccount.pin);
+                formData.append('tmn_id', currentAccount.tmn_id);
+                formData.append('payee_wallet_id', currentTransferData.accountNo);
+                formData.append('amount', currentTransferData.amount);
+
+                const response = await fetch('process_transfer.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // 2. หากโอนเงินสำเร็จ ทำการ approve transfer
+                    try {
+                        console.log('Approve URL:', `${selectedAPI.url}/api/admin/transfer/approveManual/${currentTransferData.id}`);
+                        const approveResponse = await fetch(
+                            `${selectedAPI.url}/api/admin/transfer/approveManual/${currentTransferData.id}`,
+                            {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${selectedAPI.token}`
+                                },
+                                body: JSON.stringify({
+                                    amount: parseFloat(currentTransferData.amount)
+                                })
+                            }
+                        );
+
+                        // Check if the response is not OK
+                        if (!approveResponse.ok) {
+                            const errorText = await approveResponse.text();
+                            console.error('Approve Response Error:', errorText);
+                            throw new Error(`HTTP error! status: ${approveResponse.status}, message: ${errorText}`);
+                        }
+
+                        const approveData = await approveResponse.json();
+                        console.log('Transfer approved:', approveData);
+                    } catch (approveError) {
+                        console.error('Error approving transfer:', approveError);
+                        // ยังคงดำเนินการต่อแม้ว่าการ approve จะล้มเหลว
+                    }
+
+                    // 3. อัพเดทหน้าจอ
+                    hideTransferModal();
+                    hideLoadingModal();
+
+                    // แสดง success message
+                    showSuccessModal('โอนเงินสำเร็จ');
+
+                    // อัพเดท balance และ refresh data
+                    document.getElementById('balance').textContent = result.new_balance + ' บาท';
+                    await refreshData();
+                } else {
+                    throw new Error(result.message || 'เกิดข้อผิดพลาดในการโอนเงิน');
+                }
+            } catch (error) {
+                console.error('Error in transfer:', error);
+                hideLoadingModal();
+                showErrorModal(error.message || 'เกิดข้อผิดพลาดในการโอนเงิน');
+            } finally {
+                hideTransferModal();
+            }
+        }
+
+        // Success Modal Function
+        function showSuccessModal(message) {
+            const successModal = document.createElement('div');
+            successModal.className = 'modal';
+            successModal.innerHTML = `
+                <div class="modal-content bg-gray-800 text-white p-6 rounded-lg shadow-lg max-w-lg mx-auto">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-green-500">
+                            <i class="fas fa-check-circle mr-2"></i>
+                            สำเร็จ
+                        </h2>
+                        <button onclick="this.closest('.modal').remove()" class="text-gray-400 hover:text-white">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="text-sm text-gray-300 mb-4">
+                        ${message}
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                        <button onclick="this.closest('.modal').remove()" 
+                                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+                            ตกลง
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(successModal);
+            successModal.style.display = 'block';
+        }
+        // เพิ่มฟังก์ชันอัพเดทจำนวนรายการที่รอดำเนินการ
+        function updatePendingCount(count) {
+            const status = document.getElementById('status');
+            if (count > 0) {
+                status.textContent = `Ready (${count})`;
+                status.className = 'bg-green-500 px-2 py-1 rounded text-sm';
+            } else {
+                status.textContent = 'No Pending';
+                status.className = 'bg-gray-500 px-2 py-1 rounded text-sm';
+            }
+        }
+        // Modify  to use current account
+        // แก้ไข initiateWithdraw function
+        function initiateWithdraw(withdrawal) {
+            console.log("Initiate withdraw clicked for:", withdrawal);
+            // ตรวจสอบว่าเลือกบัญชีหรือยัง
+            if (!currentAccount) {
+                alert('กรุณาเลือกบัญชีก่อนทำรายการ');
+                return;
+            }
+
+            const amountInput = document.querySelector(`input[data-id="${withdrawal._id}"]`);
+            const userEnteredAmount = amountInput ? parseFloat(amountInput.value) : withdrawal.requestAmount;
+
+            const status = document.getElementById('status').textContent;
+            if (!status.includes('Ready')) {
+                alert('ระบบกำลังทำงานอยู่ กรุณารอสักครู่');
+                return;
+            }
+
+            // เพิ่ม function showConfirmModal เพื่อแสดงหน้ายืนยัน
+            showConfirmModal({
+                ...withdrawal,
+                requestAmount: userEnteredAmount
+            });
+        }
+        async function initiateImmediateTransfer(withdrawal) {
+            console.log("Initiate immediate transfer clicked for:", withdrawal);
+            if (!currentAccount) {
+                alert('กรุณาเลือกบัญชีก่อนทำรายการ');
+                return;
+            }
+
+            try {
+                showLoadingModal();
+
+                const result = await fetchAPI('processTransfer', {
+                    ...currentAccount,
+                    ...withdrawal,
+                    employeeId: 'admin'
+                });
+
+                if (result.success) {
+                    await refreshData();
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                console.error('Error processing immediate withdrawal:', error);
+                alert('ไม่สามารถทำรายการได้: ' + error.message);
+            } finally {
+                hideLoadingModal();
+            }
+        }
+        // ฟังก์ชันสำหรับ process การถอนเงิน
+        // เพิ่ม function สำหรับยืนยันการโอน
+        // เพิ่มฟังก์ชัน processWithdrawal
+        async function processWithdrawal() {
+            if (!currentWithdrawal || !currentAccount) {
+                alert('ข้อมูลไม่ครบถ้วน / ยังไม่ได้เลือกบัญชี');
+                return;
+            }
+
+            const employeeId = document.getElementById('employeeId').value;
+            if (!employeeId) {
+                alert('กรุณากรอกรหัสพนักงาน');
+                return;
+            }
+
+            try {
+                showLoadingModal();
+                startProcessingTimer(); // เริ่มตรวจสอบระบบค้าง
+
+                // เรียก API โอนเงิน
+                const result = await fetchAPI('processTransfer', {
+                    ...currentAccount,
+                    ...currentWithdrawal,
+                    employeeId: employeeId
+                });
+
+                // แสดงผลลัพธ์
+                if (result.success) {
+                    // โอนเงินสำเร็จ
+                    hideConfirmModal();
+                    await refreshData();
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                console.error('Error processing withdrawal:', error);
+                alert('ไม่สามารถทำรายการได้: ' + error.message);
+            } finally {
+                hideLoadingModal();
+                clearProcessingTimer();
+            }
+        }
+
+
+        // ฟังก์ชันสำหรับ approve การถอนเงินแบบ manual
+        // Modified approve function to use correct API based on source
+        async function approveManualTransfer(transferId, amount, source) {
+            const config = API_CONFIGS[source.api];
+            try {
+                const response = await fetch(
+                    `${config.url}/api/admin/transfer/approveManual/${transferId}`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${config.token}`
+                        },
+                        body: JSON.stringify({
+                            amount: parseFloat(amount)
+                        })
+                    }
+                );
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'ไม่สามารถอนุมัติรายการได้');
+                }
+
+                return await response.json();
+            } catch (error) {
+                throw new Error(`เกิดข้อผิดพลาด: ${error.message}`);
+            }
+        }
+        // Update hideTransferModal function
+        function hideTransferModal() {
+            document.getElementById('transferModal').style.display = 'none';
+            document.getElementById('employeeId').value = '';
+            document.getElementById('confirmButton').disabled = true;
+            document.getElementById('timer').classList.remove('hidden');
+            currentTransferData = null;
+        }
+        // ปรับปรุงฟังก์ชัน refreshData
+        // Updated refreshData function
+        async function refreshData() {
+            showLoadingModal();
+            try {
+                const withdrawals = await fetchAllWithdrawals();
+                updateWithdrawalTable(withdrawals);
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                alert('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
+            } finally {
+                hideLoadingModal();
+            }
+        }
+        // ฟังก์ชันตรวจสอบจำนวนเงิน
+        function validateAmount(input, maxAmount) {
+            let value = parseFloat(input.value);
+            if (isNaN(value) || value < 0) {
+                input.value = 0;
+            } else if (value > maxAmount) {
+                input.value = maxAmount;
+                alert(`จำนวนเงินต้องไม่เกิน ${maxAmount} บาท`);
+            }
+        }
+
+        // ฟังก์ชันแสดงประวัติผู้ใช้
+        function showUserHistory(username) {
+            // Implementation for showing user history
+            console.log(`Show history for user: ${username}`);
+        }
+        // Timer functions
+        function updateTimer() {
+            const timeLeftElement = document.getElementById('timeLeft');
+            const [minutes, seconds] = timeLeftElement.textContent.split(':').map(Number);
+            let totalSeconds = minutes * 60 + seconds - 1;
+
+            if (totalSeconds < 0) {
+                totalSeconds = 15 * 60 + 25; // Reset to 15:25
+                refreshData();
+            }
+
+            const newMinutes = Math.floor(totalSeconds / 60);
+            const newSeconds = totalSeconds % 60;
+            timeLeftElement.textContent =
+                `${String(newMinutes).padStart(2, '0')}:${String(newSeconds).padStart(2, '0')}`;
+        }
+
+        function initializeTransferModal() {
+            const transferBtn = document.getElementById('transferButton'); // ปุ่มโอนเงิน
+            const confirmButton = document.getElementById('confirmButton'); // ปุ่มยืนยัน
+            const employeeIdInput = document.getElementById('employeeId'); // ช่องใส่รหัสพนักงาน
+            const confirmationDetails = document.getElementById('confirmationDetails'); // พื้นที่แสดงข้อมูลยืนยัน
+
+            transferBtn.addEventListener('click', async () => {
+                const selectedAccount = accounts[accountSelect.value]; // ดึงบัญชีที่เลือก
+                const employeeId = employeeIdInput.value;
+                const payeeWalletId = payeeWalletIdInput.value;
+                const amount = amountInput.value;
+
+                if (!selectedAccount || !employeeId || !payeeWalletId || !amount || isNaN(amount) || amount <= 0) {
+                    showModal('ข้อผิดพลาด', 'กรุณากรอกข้อมูลให้ครบถ้วนและถูกต้อง', false);
+                    return;
+                }
+
+                showLoader();
+                try {
+                    // ดึงชื่อผู้รับเงิน
+                    const nameResult = await fetchAPI('getRecipientName', {
+                        ...selectedAccount,
+                        payee_wallet_id: payeeWalletId
+                    });
+                    hideLoader();
+
+                    // อัพเดทข้อมูลในหน้ายืนยัน
+                    confirmationDetails.innerHTML = `
+            <p>ยอดเงิน: ${parseFloat(amount).toFixed(2)} บาท</p>
+            <p>หมายเลข: ${payeeWalletId}</p>
+            <p>ชื่อผู้รับ: ${nameResult.recipient_name}</p>
+        `;
+                    confirmButton.disabled = false;
+
+                    // แสดง Modal
+                    showTransferModal();
+
+                    // เพิ่ม Event Listener สำหรับการยืนยัน
+                    confirmButton.onclick = async () => {
+                        hideTransferModal();
+                        showLoader();
+                        try {
+                            const result = await fetchAPI('transfer', {
+                                ...selectedAccount,
+                                employee_id: employeeId,
+                                payee_wallet_id: payeeWalletId,
+                                amount: amount
+                            });
+                            hideLoader();
+                            showModal('สำเร็จ', result.message, true);
+                            updateBalance();
+
+                            // เคลียร์ข้อมูลหลังโอนเสร็จ
+                            payeeWalletIdInput.value = '';
+                            amountInput.value = '';
+                        } catch (error) {
+                            hideLoader();
+                            let errorMessage = error.message;
+                            if (errorMessage.includes('TRC-4011')) {
+                                errorMessage = 'หมายเลขโทรศัพท์หรือ Wallet ID ไม่ถูกต้อง';
+                            } else if (errorMessage.includes('TRC-1001')) {
+                                errorMessage = 'ยอดเงินคงเหลือไม่เพียงพอ';
+                            } else if (errorMessage.includes('TRC-55408')) {
+                                errorMessage = 'ไม่สามารถทำรายการได้ในขณะนี้ <br> Sorry, transaction right now. (R)';
+                            } else if (errorMessage.includes('TRC-888')) {
+                                errorMessage = 'รายการถอนซ้ำ';
+                            }
+                            showModal('ข้อผิดพลาด', errorMessage, false);
+                        }
+                    };
+
+                } catch (error) {
+                    hideLoader();
+                    showModal('ข้อผิดพลาด', 'ไม่สามารถดึงข้อมูลผู้รับเงินได้', false);
+                }
+            });
+        }
+        // เพิ่มฟังก์ชันจัดการ Error Modal
+        function showErrorModal(message) {
+            const errorModal = document.getElementById('errorModal');
+            const errorMessageDiv = document.getElementById('errorMessage');
+            let formattedMessage = message;
+
+            // จัดการข้อความ error ตามรูปแบบที่ต้องการ
+            if (message.includes('TRC-4011')) {
+                formattedMessage = 'หมายเลขโทรศัพท์หรือ Wallet ID ไม่ถูกต้อง';
+            } else if (message.includes('TRC-1001')) {
+                formattedMessage = 'ยอดเงินคงเหลือไม่เพียงพอ';
+            } else if (message.includes('TRC-55408')) {
+                formattedMessage = `ไม่สามารถทำรายการได้ในขณะนี้
+        <br>Sorry, transaction right now. (R)
+        <br>ต้องเว้นระยะถอนไปก่อน Wallet โดนทรูระงับการโอนชั่วคราว
+        <br><b>รบกวนน้องแอดมินทำรายการถอนมือไปก่อน</b>
+        <br>ต้องเว้นการถอนผ่านระบบ ขั้นต่ำ 1 ชั่วโมง
+        <br>ขออภัยในความไม่สะดวกครับ`;
+            } else if (message.includes('TRC-888')) {
+                formattedMessage = 'รายการถอนซ้ำ';
+            } else if (message.includes('TRC-55407') || message.includes('ไม่สามารถทำรายการได้') || message.includes('กรุณาตรวจสอบเบอร์โทรศัพท์')) {
+                formattedMessage = 'ไม่สามารถทำรายการได้ <br> กรุณาตรวจสอบเบอร์โทรศัพท์อีกครั้ง หรือแจ้งผู้รับโอนให้ลงทะเบียนและยืนยันตัวตนกับ TrueMoney ก่อนดำเนินการต่อ';
+            }
+
+            errorMessageDiv.innerHTML = formattedMessage;
+            errorModal.style.display = 'block';
+        }
+
+        function hideErrorModal() {
+            document.getElementById('errorModal').style.display = 'none';
+        }
+
+
+        // Function to hide the modal
+        // Function to show the transfer confirmation modal with timer
+        function showTransferModal(id, amount, bank, accountNo, bankAccount_Name, withdrawalLimit, source) {
+            // Clear the employee ID field
+            document.getElementById('employeeId').value = '';
+            const inputField = document.getElementById(`withdrawal-${id}`);
+            const userEnteredAmount = inputField ? parseFloat(inputField.value) || amount : amount;
+
+
+            const selectedAPI = source === 'A' || source === 'B' ? source : 'A'; // Default to 'A' if invalid
+            // Store current transfer data
+            currentTransferData = {
+                id: id,
+                amount: userEnteredAmount,
+                bank: bank,
+                accountNo: accountNo,
+                bankAccount_Name: bankAccount_Name,
+                withdrawalLimit: withdrawalLimit,
+                source: {
+                    api: selectedAPI  // or 'B' depending on which API you're using
+                }
+            };
+            console.log('Current Transfer Data:', currentTransferData);
+            console.log('Selected API:', currentTransferData.source.api);
+            console.log('Selected API:', selectedAPI);
+
+            // Update the confirmation modal with transfer details
+            document.getElementById('confirmationDetails').innerHTML = `
+                <div class="space-y-2 text-white">
+                    <div class="mb-2">
+                        <span class="text-gray-400">เลขบัญชี:</span> 
+                        <span class="ml-2">${accountNo}</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-gray-400">ชื่อลูกค้า:</span> 
+                        <span class="ml-2">${bankAccount_Name}</span>
+                    </div>
+                    <div class="mt-3">
+                        <span class="text-red-500 font-medium">ยืนยันการถอนจำนวน: ${userEnteredAmount.toFixed(2)} บาท</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-yellow-400">ยอดถอนสูงสุด: ${withdrawalLimit} บาท</span> 
+                    </div>
+                </div>
+            `;
+
+            // Show the modal
+            document.getElementById('transferModal').style.display = 'block';
+
+            // Get confirm button and timer elements
+            const confirmButton = document.getElementById('confirmButton');
+            const timerDiv = document.getElementById('timer');
+            const countdownSpan = document.getElementById('countdown');
+
+            // Initial state
+            confirmButton.disabled = true;
+            timerDiv.classList.remove('hidden');
+
+            // Set countdown time (5 seconds)
+            let countdown = 1;
+            countdownSpan.textContent = countdown;
+
+            // Start countdown timer
+            const timerInterval = setInterval(() => {
+                countdown--;
+                countdownSpan.textContent = countdown;
+
+                if (countdown <= 0) {
+                    // Enable button and hide timer when countdown is complete
+                    clearInterval(timerInterval);
+                    confirmButton.disabled = false;
+                    timerDiv.classList.add('hidden');
+                }
+            }, 1000);
+        }
+
+
+        // Event listener for employee ID input
+        document.getElementById('employeeId').addEventListener('input', function () {
+            const confirmButton = document.getElementById('confirmButton');
+            const employeeId = this.value.trim();
+
+            if (employeeId && !document.getElementById('timer').offsetHeight) {
+                // Only enable if timer is complete (hidden) and employee ID is not empty
+                confirmButton.disabled = false;
+            } else {
+                confirmButton.disabled = true;
+            }
+        });
+
+        // Event listeners for number input validation
+        document.addEventListener('input', function (e) {
+            if (e.target.type === 'number') {
+                const value = parseFloat(e.target.value);
+                const max = parseFloat(e.target.max);
+                if (value > max) {
+                    e.target.value = max;
+                }
+                if (value < 0) {
+                    e.target.value = 0
+                }
+            }
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function () {
+            refreshData();
+            // Start timer
+            setInterval(updateTimer, 1000);
+        });
+
+        // Handle authentication token refresh
+        let tokenRefreshInterval = setInterval(async function () {
+            // Add your token refresh logic here if needed
+            // Example:
+            // const newToken = await refreshAuthToken();
+            // AUTH_TOKEN = newToken;
+        }, 30 * 60 * 1000); // Refresh token every 30 minutes
+
+        // Cleanup
+        window.addEventListener('beforeunload', function () {
+            clearInterval(tokenRefreshInterval);
+        });
+    </script>
+</body>
+
+</html>

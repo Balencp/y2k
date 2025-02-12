@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>User History</title>
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border: 1px solid #333;
+        }
+        th {
+            background-color: #222;
+            color: #ffcc00;
+        }
+        tr:nth-child(even) {
+            background-color: #2c2c2c;
+        }
+        tr:nth-child(odd) {
+            background-color: #1c1c1c;
+        }
+        .btn {
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .btn-submit {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .bonus-description {
+            color: #ffcc00;
+            font-style: italic;
+            padding: 5px;
+            background-color: #333;
+            border-radius: 5px;
+        }
+        .TRANSFER {
+            color: orange;
+        }
+        .DEPOSIT {
+            color: green;
+        }
+        .WITHDRAW {
+            color: red;
+        }
+        .FINISH_BONUS {
+            color: pink;
+        }
+        .SUCCESS {
+            color: lightgreen;
+        }
+        .BONUS {
+            color: pink;
+        }
+        .FAILURE {
+            color: red;
+        }
+        .clear-slot {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .clear-slot:hover {
+            background-color: #c82333;
+        }
+        .popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            background-color: #1e1e1e;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            text-align: center;
+            z-index: 1000;
+        }
+        .popup .message {
+            margin: 20px 0;
+        }
+        .btn-confirm, .btn-cancel {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+        .btn-confirm {
+            background-color: green;
+            color: white;
+        }
+        .btn-cancel {
+            background-color: red;
+            color: white;
+        }
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 500;
+            display: none;
+        }
+        .server-badge {
+            background-color: #333;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>ประวัติผู้ใช้งาน</h1>
+    <!-- เพิ่มในส่วนบนของ HTML -->
+
+    <button class="clear-slot" id="check-slot-btn" onclick="checkUserSlot()">เคลียร์ User</button>
+    <div id="user-info"></div>
+    <div id="overlay"></div>
+    <div id="confirmPopup" class="popup">
+        <div class="message" id="confirmMessage"></div>
+        <button class="btn-confirm" onclick="confirmClearSlot()">Yes</button>
+        <button class="btn-cancel" onclick="closePopup('confirmPopup')">No</button>
+    </div>
+    <div id="overlay"></div>
+    <div id="resultPopup" class="popup">
+        <div class="message" id="resultMessage"></div>
+        <button class="btn-cancel" onclick="closePopup('resultPopup')">OK</button>
+    </div>
+    <p id="clear-slot-result"></p>
+    <div id="user-info"></div>
+    <table id="user-table">
+        <thead>
+            <tr>
+                <th>ลำดับที่</th>
+                <th>ผู้ใช้งาน</th>
+                <th>วันที่ทำรายการ</th>
+                <th>ประเภท</th>
+                <th>รายละเอียด</th>
+                <th>จำนวนเงิน</th>
+                <th>โดย</th>
+                <th>โบนัส</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- ข้อมูลจะถูกเติมด้วย JavaScript -->
+        </tbody>
+    </table>
+    
+    <script>
+        // เพิ่มโค้ดนี้ที่ต้น script ในหน้า history.html
+        document.addEventListener('DOMContentLoaded', function () {
+            // ดึง username จาก URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const username = urlParams.get('username');
+
+            if (username) {
+                // ถ้ามี username ใน URL ให้กรอกในช่องค้นหาและค้นหาอัตโนมัติ
+                document.getElementById('username').value = username;
+                fetchUserData(username);
+            }
+        });
+        // Define multiple API configurations
+        const API_CONFIGS = {
+            A: {
+                url: 'https://superslotwallet-backend.jwallet.link',
+                token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NzlmNWFjNDFmNGVkZTdiYWQ3Mzg4MTQiLCJwYXNzd29yZCI6IiQyYiQxMiRTWThzZ3FBRDkyS2ZITVJJbDNldzllZlBuLmY0cUVud3JUSGJ5Yy4xTHR5NFB5NjduRGpVVyIsImF1dGhvcml0eSI6IkFETUlOIiwicm9sZXMiOlsid2FpdGluZy10cmFuc2ZlciIsImRhc2hib2FyZCJdLCJleHRyYVJvbGVzIjpbXSwiZW5hYmxlQmlsbGluZyI6dHJ1ZSwiaWF0IjoxNzM4NDk3MzMxfQ.YniEw1Tzh6osCoTiJHrldHXScbHTiUgtVBxwWdWxGkI',
+                name: 'SSW'
+            },
+            B: {
+                url: '',
+                token: '..MymgGKTR3-',
+                name: ''
+            }
+        };
+
+        // แก้ไขส่วน DOMContentLoaded event listener
+        document.addEventListener('DOMContentLoaded', function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            const username = urlParams.get('username');
+            let source = urlParams.get('source');
+
+            // ถ้าไม่มี source หรือ source ไม่ถูกต้อง ให้ใช้ค่าเริ่มต้นเป็น A
+            if (!source || !API_CONFIGS[source]) {
+                source = 'A';
+            }
+
+            if (username) {
+                console.log(`Loading data for user ${username} from server ${source}`);
+                fetchUserData(username, source);
+            }
+        });
+        
+        function displayUserInfo(user) {
+            const profitOrLoss = (user.statWithdraw - user.statDeposit).toFixed(2); // คำนวณกำไร/ขาดทุน
+            const info = `
+                <p><strong>Username:</strong> ${user.username}</p>
+            `;
+            document.getElementById('user-info').innerHTML = info;
+        }
+
+
+        // แก้ไขฟังก์ชัน fetchUserData
+        async function fetchUserData(username, source = 'A') { // กำหนดค่าเริ่มต้นเป็น A
+            try {
+                // ตรวจสอบว่ามี username หรือไม่
+                if (!username) {
+                    throw new Error('Username is required');
+                }
+
+                // ใช้ config ตาม source หรือใช้ config A ถ้าไม่มี source ที่ระบุ
+                const config = API_CONFIGS[source] || API_CONFIGS.A;
+
+                const response = await fetch(`${config.url}/api/admin/userStatement/list`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json;charset=UTF-8',
+                        'Authorization': `Bearer ${config.token}`
+                    },
+                    body: JSON.stringify({
+                        page: 1,
+                        limit: 50,
+                        username: username,
+                        sort: "-createdAt"
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const result = await response.json();
+                const user = result.user;
+                const statements = result.statements;
+
+                // แสดงข้อมูล server ที่กำลังใช้งาน
+                document.getElementById('user-info').innerHTML = `
+                    <p>ข้อมูลสำหรับผู้ใช้งาน: ${user.name} (${user.username})</p>
+                    <p>Server: <span class="server-badge">${config.name}</span></p>
+                `;
+
+                // เรียกใช้ฟังก์ชัน displayUserInfo
+                displayUserInfo(user);
+
+                // แสดงข้อมูลในตาราง
+                const tableBody = document.getElementById('user-table').getElementsByTagName('tbody')[0];
+                tableBody.innerHTML = '';
+
+                statements.forEach((statement, index) => {
+                    const bonusDescription = statement.bonus ? statement.bonus.description : '-';
+                    const statementTypeThai = {
+                        'DEPOSIT': 'ฝากเงิน',
+                        'TRANSFER': 'โอนเงิน',
+                        'WITHDRAW': 'ถอนเงิน',
+                        'FINISH_BONUS': 'จบโบนัส',
+                        'BONUS': 'รับโบนัส'
+                    };
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${user.name} (${user.username})</td>
+            <td>${new Date(statement.createdAt).toLocaleString()}</td>
+            <td class="${statement.statementType}">${statementTypeThai[statement.statementType]}</td>
+            <td>${statement.from} => ${statement.to}</td>
+            <td>${statement.amount.toFixed(2)}</td>
+            <td>${statement.note ? statement.note.type : '-'}</td>
+            <td>${bonusDescription}</td>
+        `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`Error fetching user data from ${API_CONFIGS[source].name}: ${error.message}`);
+            }
+        }
+
+        function displayTransactions(txList) {
+            const tbody = document.getElementById('transactionTableBody');
+            tbody.innerHTML = '';
+
+            for (const tx of txList) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${formatDate(tx.createdAt)}</td>  
+                    <td>${mapTransactionType(tx.statementType)}</td>
+                    <td>${tx.amount.toFixed(2)}</td>
+                    <td>${tx.beforeAmount.toFixed(2)}</td>
+                    <td>${tx.ref.join(', ') || '-'}</td>
+                    <td>${tx.status}</td>
+                    <td>${tx.bonus?.description || '-'}</td>
+                    `;
+                tbody.appendChild(row);
+            }
+        }
+
+
+        async function checkUserSlot() {
+            const username = new URLSearchParams(window.location.search).get('username');
+            if (!username) {
+                return;
+            }
+
+            const response = await fetch(`${apiUrl}/api/admin/userManage/list`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json;charset=UTF-8',
+                    'Authorization': bearerToken
+                },
+                body: JSON.stringify({
+                    page: 1,
+                    limit: 20,
+                    username: username,
+                    sort: "-createdAt"
+                })
+            });
+
+            const result = await response.json();
+            const user = result.users[0];
+            const slot = user.userSlot && user.userSlot.length > 0 ? user.userSlot[0] : null;
+            const userWallet = user.userWallet;
+
+            if (slot) {
+                document.getElementById('confirmMessage').innerText = `ลูกค้ามีการเปิดกระเป๋าเกม ${slot.slotCode} \nUser Game = ${slot.username} \nจำนวนเงินในเกม = ${slot.amount} \nยอดเงินใน Wallet = ${userWallet.amount} \nต้องการเคลียเงินออกหรือไม่\n`;
+                document.getElementById('overlay').style.display = 'block';
+                document.getElementById('confirmPopup').style.display = 'block';
+                document.getElementById('check-slot-btn').dataset.userId = user._id; // Assign userId to the button's dataset
+                document.getElementById('check-slot-btn').dataset.walletAmount = userWallet.amount; // Assign wallet amount to the button's dataset
+            } else if (userWallet && userWallet.amount > 0) {
+                document.getElementById('confirmMessage').innerText = `ยอดเงินใน Wallet = ${userWallet.amount} \nต้องการเคลียเงินออกหรือไม่\n`;
+                document.getElementById('overlay').style.display = 'block';
+                document.getElementById('confirmPopup').style.display = 'block';
+                document.getElementById('check-slot-btn').dataset.userId = user._id; // Assign userId to the button's dataset
+                document.getElementById('check-slot-btn').dataset.walletAmount = userWallet.amount; // Assign wallet amount to the button's dataset
+            } else {
+                document.getElementById('confirmMessage').innerText = 'User ไม่มีข้อมูลกระเป๋าเกม';
+                document.getElementById('overlay').style.display = 'block';
+                document.getElementById('confirmPopup').style.display = 'block';
+            }
+        }
+
+        async function confirmClearSlot() {
+            const userId = document.getElementById('check-slot-btn').dataset.userId;
+            const walletAmount = document.getElementById('check-slot-btn').dataset.walletAmount;
+            if (!userId) {
+                return;
+            }
+
+            const clearSlotResponse = await fetch(`${apiUrl}/api/admin/userManage/clear/slot/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': bearerToken
+                }
+            });
+
+            const clearSlotResult = await clearSlotResponse.json();
+            let message = '';
+            if (clearSlotResult.result === "ok" && walletAmount > 0) {
+                const withdrawResponse = await fetch(`${apiUrl}/api/admin/userManage/wallet/${userId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json;charset=UTF-8',
+                        'Authorization': bearerToken
+                    },
+                    body: JSON.stringify({
+                        amount: walletAmount,
+                        currency: "THB",
+                        type: "WITHDRAW"
+                    })
+                });
+
+                const withdrawResult = await withdrawResponse.json();
+                console.log("withdrawResult",withdrawResult)
+                
+                if (withdrawResult.amount === 0) {
+                    message = 'ลบ Slot และถอนเงินสำเร็จ!';
+                } else {
+                    message = 'ลบ Slot สำเร็จ แต่เกิดข้อผิดพลาดในการถอนเงิน';
+                }
+            } else if (clearSlotResult.result === "ok") {
+                message = 'ลบ User Slot สำเร็จ!';
+            } else {
+                message = 'เกิดข้อผิดพลาดในการลบ Slot';
+            }
+
+            showResultPopup(message);
+        }
+        function showResultPopup(message) {
+            document.getElementById('resultMessage').innerText = message;
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('resultPopup').style.display = 'block';
+        }
+
+        function closePopup(popupId) {
+            document.getElementById(popupId).style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+            if (popupId === 'resultPopup') {
+                location.reload(); // รีเฟรชหน้าเมื่อปิด resultPopup
+            }
+        }
+    </script>
+</body>
+</html>

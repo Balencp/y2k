@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สรุปข้อมูลการโอนเงิน</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;700&display=swap');
+
+        body { font-family: 'Kanit', sans-serif; }
+        table { border-collapse: collapse; }
+        th, td { border: 1px solid #e2e8f0; padding: 8px; }
+        th { background-color: #f8fafc; }
+    </style>
+</head>
+
+<body class="bg-gray-300 p-4">
+    <div class="container mx-auto">
+        <h1 class="text-3xl font-bold mb-4 text-center">สรุปข้อมูลการโอนเงิน</h1>
+
+        <div class="mb-4 flex items-center flex-wrap">
+            <label for="startDate" class="mr-2">วันที่เริ่มต้น:</label>
+            <input type="text" id="startDate" class="border p-1 mr-2 w-32">
+            <input type="time" id="startTime" class="border p-1 mr-4">
+        
+            <label for="endDate" class="mr-2">วันที่สิ้นสุด:</label>
+            <input type="text" id="endDate" class="border p-1 mr-2 w-32">
+            <input type="time" id="endTime" class="border p-1 mr-4">
+        
+            <button id="searchBtn" class="bg-blue-500 text-white px-4 py-1 rounded mt-2">ค้นหา</button>
+        </div>
+
+        <div class="flex mb-4">
+            <div class="w-1/2 pr-2">
+                <table class="w-full bg-white shadow-md rounded">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2 text-left">ชื่อพนักงาน</th>
+                            <th class="p-2 text-right">ยอดรวม</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employeeSummary"></tbody>
+                </table>
+            </div>
+            <div class="w-1/2 pl-2">
+                <canvas id="pieChart" style="max-width: 300px; max-height: 300px;"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white shadow-md rounded p-4">
+            <h2 class="text-xl font-bold mb-2">รายการโอนเงินล่าสุด (100 รายการ)</h2>
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="p-2 text-left">เบอร์โทรศัพท์</th>
+                        <th class="p-2 text-right">จำนวนเงิน</th>
+                        <th class="p-2 text-left">วันที่และเวลา</th>
+                        <th class="p-2 text-left">ชื่อพนักงาน</th>
+                    </tr>
+                </thead>
+                <tbody id="transferLog"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            flatpickr("#startDate", {
+                dateFormat: "d/m/Y",
+                locale: "th"
+            });
+
+            flatpickr("#endDate", {
+                dateFormat: "d/m/Y",
+                locale: "th"
+            });
+
+            document.getElementById('searchBtn').addEventListener('click', fetchData);
+        });
+
+        async function fetchData() {
+            const startDate = document.getElementById('startDate').value;
+            const startTime = document.getElementById('startTime').value;
+            const endDate = document.getElementById('endDate').value;
+            const endTime = document.getElementById('endTime').value;
+
+            const startDateTime = convertToISOString(startDate, startTime);
+            const endDateTime = convertToISOString(endDate, endTime);
+
+            try {
+                const response = await fetch(`get_transfer_data.php?startDate=${startDateTime}&endDate=${endDateTime}`);
+                const data = await response.json();
+
+                updateEmployeeSummary(data.employeeSummary);
+                updatePieChart(data.employeeSummary);
+                updateTransferLog(data.transferLog);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        function convertToISOString(date, time) {
+            const [day, month, year] = date.split('/');
+            const [hours, minutes] = time.split(':');
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hours}:${minutes}:00`;
+        }
+
+        function updateEmployeeSummary(summary) {
+            const tbody = document.getElementById('employeeSummary');
+            tbody.innerHTML = '';
+
+            let totalAmount = 0;
+
+            summary.forEach(item => {
+                totalAmount += item.total_amount;
+                const row = `
+                <tr>
+                    <td class="p-2">${item.employee_name}</td>
+                    <td class="p-2 text-right">${item.total_amount.toLocaleString()} บาท</td>
+                </tr>
+            `;
+                tbody.innerHTML += row;
+            });
+
+            // เพิ่มบรรทัดสรุปยอดรวมที่ด้านล่างของตาราง
+            const totalRow = `
+            <tr class="font-bold">
+                <td class="p-2 text-right">ยอดรวมทั้งหมด</td>
+                <td class="p-2 text-right">${totalAmount.toLocaleString()} บาท</td>
+            </tr>
+        `;
+            tbody.innerHTML += totalRow;
+        }
+
+        function updatePieChart(summary) {
+            // ถ้ามีกราฟเก่าอยู่ ให้ทำลายก่อน
+            if (window.myPieChart) {
+                window.myPieChart.destroy();  // รีเซ็ตกราฟเก่า
+                window.myPieChart = null;  // ตั้งค่าเป็น null
+            }
+
+            const ctx = document.getElementById('pieChart').getContext('2d');
+            window.myPieChart = new Chart(ctx, {  // สร้างกราฟใหม่
+                type: 'pie',
+                data: {
+                    labels: summary.map(item => item.employee_name),
+                    datasets: [{
+                        data: summary.map(item => item.total_amount),
+                        backgroundColor: [
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                            '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    title: {
+                        display: true,
+                        text: 'สัดส่วนยอดโอนตามพนักงาน'
+                    }
+                }
+            });
+        }
+
+        function updateTransferLog(log) {
+            const tbody = document.getElementById('transferLog');
+            tbody.innerHTML = '';
+            log.forEach(item => {
+                const date = new Date(item.date_time);
+                const formattedDate = `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                const row = `
+        <tr>
+            <td class="p-2">${item.phonenumber}</td>
+            <td class="p-2 text-right">${item.amount.toLocaleString()} บาท</td>
+            <td class="p-2">${formattedDate}</td>
+            <td class="p-2">${item.employee_name}</td>
+        </tr>
+        `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // โหลดข้อมูลเริ่มต้นเมื่อโหลดหน้า
+        window.addEventListener('load', fetchData);
+    </script>
+</body>
+
+</html>

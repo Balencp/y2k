@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ประวัติการทำรายการ TrueMoney Wallet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;700&display=swap');
+
+        body {
+            font-family: 'Kanit', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto p-4">
+        <h1 class="text-3xl font-bold mb-6 text-center text-blue-600">ประวัติการทำรายการ TrueMoney Wallet</h1>
+
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold mb-4">ค้นหาประวัติการทำรายการ</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label for="account" class="block text-sm font-medium text-gray-700 mb-1">เลือกบัญชี</label>
+                    <select id="account" class="w-full p-2 border border-gray-300 rounded-md">
+                        <option value="1">บัญชี 1 (0962266937)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="start_date" class="block text-sm font-medium text-gray-700 mb-1">วันที่เริ่มต้น</label>
+                    <input type="date" id="start_date" class="w-full p-2 border border-gray-300 rounded-md">
+                </div>
+                <div>
+                    <label for="end_date" class="block text-sm font-medium text-gray-700 mb-1">วันที่สิ้นสุด</label>
+                    <input type="date" id="end_date" class="w-full p-2 border border-gray-300 rounded-md">
+                </div>
+            </div>
+            <button id="fetch_history"
+                class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600 transition duration-300">
+                ดึงข้อมูลประวัติ
+            </button>
+        </div>
+
+        <div id="error_message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        </div>
+
+        <div id="loading" class="hidden">
+            <div class="flex justify-center items-center py-4">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <span class="ml-2">กำลังโหลดข้อมูล... (<span id="loading_progress">0</span> รายการ)</span>
+            </div>
+        </div>
+
+        <div id="history_results" class="bg-white p-6 rounded-lg shadow-md hidden">
+            <h2 class="text-xl font-semibold mb-4">ผลลัพธ์ (<span id="total_records">0</span> รายการ)</h2>
+            <div id="results_content"></div>
+        </div>
+    </div>
+
+    <script>
+        const accounts = {
+            '1': {
+                tmn_key_id: '10853',
+                mobile_number: '0809811781',
+                login_token: 'L-28dda1e5-9626-4b2b-9f51-7ad649bb1a42',
+                pin: '365789',
+                tmn_id: 'tmn.10126882882'
+            },
+            '2': {
+                tmn_key_id: '00000',
+                mobile_number: '00000',
+                login_token: '00000',
+                pin: '00000',
+                tmn_id: 'tmn.00000'
+            }
+        };
+
+        let allTransactions = [];
+        let isLoading = false;
+
+        function showLoading() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('fetch_history').disabled = true;
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('fetch_history').disabled = false;
+        }
+
+        function updateLoadingProgress(count) {
+            document.getElementById('loading_progress').textContent = count;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error_message');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('error_message').classList.add('hidden');
+        }
+
+        async function fetchAllTransactions() {
+            if (isLoading) return;
+
+            const accountId = document.getElementById('account').value;
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+
+            if (!accountId || !startDate || !endDate) {
+                showError('กรุณาเลือกบัญชี วันที่เริ่มต้น และวันที่สิ้นสุด');
+                return;
+            }
+
+            hideError();
+            showLoading();
+            isLoading = true;
+            allTransactions = [];
+            let currentPage = 1;
+            let hasMore = true;
+
+            try {
+                while (hasMore) {
+                    const response = await fetch('process_history.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            action: 'fetchTransactionHistory',
+                            ...accounts[accountId],
+                            start_date: startDate,
+                            end_date: endDate,
+                            page: currentPage,
+                            limit: 1000
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        allTransactions = [...allTransactions, ...result.data];
+                        updateLoadingProgress(allTransactions.length);
+                        hasMore = result.data.length === 100;
+                        currentPage++;
+                    } else {
+                        throw new Error(result.message);
+                    }
+                }
+
+                displayResults(allTransactions);
+                document.getElementById('history_results').classList.remove('hidden');
+            } catch (error) {
+                showError(`เกิดข้อผิดพลาด: ${error.message}`);
+            } finally {
+                hideLoading();
+                isLoading = false;
+            }
+        }
+
+        function displayResults(activities) {
+            const resultsContent = document.getElementById('results_content');
+            document.getElementById('total_records').textContent = activities.length;
+
+            if (activities.length === 0) {
+                resultsContent.innerHTML = '<p>ไม่พบข้อมูลในช่วงเวลาที่เลือก</p>';
+                return;
+            }
+
+            let html = '<div class="overflow-x-auto"><table class="min-w-full bg-white">';
+            html += '<thead class="bg-gray-100"><tr><th class="py-2 px-4 border-b">วันที่</th><th class="py-2 px-4 border-b">ประเภท</th><th class="py-2 px-4 border-b">จำนวนเงิน</th><th class="py-2 px-4 border-b">รายละเอียด</th></tr></thead>';
+            html += '<tbody>';
+
+            activities.forEach(activity => {
+                const date = new Date(activity.date_time).toLocaleString('th-TH');
+                const amount = parseFloat(activity.amount).toLocaleString('th-TH', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+                const amountClass = activity.transaction_type === 'DEBIT' ? 'text-red-500' : 'text-green-500';
+
+                html += `<tr class="hover:bg-gray-50">
+                    <td class="py-2 px-4 border-b">${date}</td>
+                    <td class="py-2 px-4 border-b">${activity.type}</td>
+                    <td class="py-2 px-4 border-b ${amountClass}">${amount}</td>
+                    <td class="py-2 px-4 border-b">${activity.title},${activity.transaction_reference_id}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table></div>';
+            resultsContent.innerHTML = html;
+        }
+
+        document.getElementById('fetch_history').addEventListener('click', fetchAllTransactions);
+    </script>
+</body>
+
+</html>
