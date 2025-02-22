@@ -154,7 +154,6 @@ function check_recent_transfer($bank_account_no, $amount) {
     return $recent;
 }
 
-
 function process_action($action, $data) {
     switch ($action) {
         case 'getRecipientName':
@@ -171,94 +170,6 @@ function process_action($action, $data) {
             $balance = $TMNOne->getBalance();
             return ['success' => true, 'balance' => $balance];
 
-        case 'transferp2p':
-            $employee = check_employee($data['employee_id']);
-            if (!$employee) {
-                throw new Exception('รหัสพนักงานไม่ถูกต้อง');
-            }
-
-            $duplicate = check_duplicate_transfer($data['payee_wallet_id'], $data['amount']);
-            if ($duplicate) {
-                throw new Exception('พบรายการถอนซ้ำ');
-            }
-
-            $TMNOne = new TMNOne();
-            $TMNOne->setData($data['tmn_key_id'], $data['mobile_number'], $data['login_token'], $data['tmn_id']);
-            $TMNOne->loginWithPin6($data['pin']);
-            
-            // Get recipient name before transfer
-            $recipientName = $TMNOne->getRecipientName($data['payee_wallet_id']);
-            
-            // Perform transfer
-            $result = $TMNOne->transferP2P($data['payee_wallet_id'], $data['amount'], '');
-            
-            // Check transfer result
-            if (!isset($result['transfer_status']) || $result['transfer_status'] !== 'PROCESSING') {
-                $error_message = isset($result['error']) ? $result['error'] : 'เกิดข้อผิดพลาดในการโอนเงิน';
-                if (strpos($error_message, 'TRC-4011') !== false) {
-                    throw new Exception('Error: Invalid phone number or Wallet ID.');
-                } elseif (strpos($error_message, 'TRC-1001') !== false) {
-                    throw new Exception('Error: Insufficient balance / ยอดคงเหลือไม่พอ.');
-                } elseif (strpos($error_message, 'TRC-55408') !== false) {
-                    throw new Exception('ไม่สามารถทำรายการได้ในณะนี้ <br> Sorry,transaction right now. (R) <br> ต้องเว้นระยะถอนไปก่อน Wallet โดนทรูระงับการโอนชั่วคราว <br><b>รบกวนน้องแอดมินทำรายการถอนมือไปก่อน </b><br>ต้องเว้นการถอนผ่านระบบ ขั้นต่ำ 1 ชั่วโมง <br> ขออภัยในความไม่สะดวกครับ ');
-                } elseif (strpos($error_message, 'TRC-888') !== false) {
-                    throw new Exception('Error: รายการถอนซ้ำ');
-                } else {
-                    throw new Exception($error_message);
-                }
-            }
-
-            // If we get here, transfer was successful
-            $conn = get_connection();
-            $date_time = date('Y-m-d H:i:s');
-            
-            // Prepare notification message
-            $message = "การโอนเงินสำเร็จ!\nเบอร์โทรศัพท์: {$data['payee_wallet_id']}\nชื่อลูกค้า: {$recipientName}\nจำนวนเงิน: {$data['amount']} บาท\nพนักงาน: {$employee['employee_name']}\nเวลา: {$date_time}";
-            
-            // Send Telegram notification
-            $telegram_message = "<b>True Wallet โอนเงินสำเร็จ!</b>\n"
-                            . "เบอร์โทรศัพท์: {$data['payee_wallet_id']}\n"
-                            . "ชื่อลูกค้า: {$recipientName}\n"
-                            . "จำนวนเงิน: {$data['amount']} บาท\n"
-                            . "พนักงาน: {$employee['employee_name']}\n"
-                            . "เวลา: {$date_time}";
-            sendTelegramNotify($telegram_message);
-            
-            // Log transactions
-            $stmt = $conn->prepare("INSERT INTO tranferlog_y2k_ptop (amount, date_time, bankAccountNo) VALUES (:amount, :date_time, :bank_account_no)");
-            $stmt->execute([
-                'amount' => $data['amount'],
-                'date_time' => $date_time,
-                'bank_account_no' => $data['payee_wallet_id']
-            ]);
-
-            $stmt = $conn->prepare("INSERT INTO tranferlog_y2k (phonenumber, amount, date_time, employee_name, employee_id) VALUES (:phonenumber, :amount, :date_time, :employee_name, :employee_id)");
-            $stmt->execute([
-                'phonenumber' => $data['payee_wallet_id'],
-                'amount' => $data['amount'],
-                'date_time' => $date_time,
-                'employee_name' => $employee['employee_name'],
-                'employee_id' => $data['employee_id']
-            ]);
-
-            $stmt = $conn->prepare("INSERT INTO tranferlogall (phonenumber, customername, amount, date_time, employee_name, employee_id, prefix_wep, datalog) VALUES (:phonenumber, :customername, :amount, :date_time, :employee_name, :employee_id, :prefix_wep, :datalog)");
-            $stmt->execute([
-                'phonenumber' => $data['payee_wallet_id'],
-                'customername' => $recipientName,
-                'amount' => $data['amount'],
-                'date_time' => $date_time,
-                'employee_name' => $employee['employee_name'],
-                'employee_id' => $data['employee_id'],
-                'prefix_wep' => 'y2k',
-                'datalog' => ''
-            ]);
-
-            return [
-                'success' => true,
-                'message' => 'โอนเงินสำเร็จ',
-                'new_balance' => $TMNOne->getBalance()
-            ];
-        
         case 'transfer':
             try {
                  // ตรวจสอบ Content-Type
@@ -372,7 +283,7 @@ function process_action($action, $data) {
                 try {
                     // บันทึก tranferlog_bl_ptop
                     $stmt = $conn->prepare("
-                        INSERT INTO tranferlog_y2k_ptop (
+                        INSERT INTO tranferlog_bl_ptop (
                             amount, date_time, bankAccountNo
                         ) VALUES (
                             :amount, :date_time, :bank_account_no
@@ -387,7 +298,7 @@ function process_action($action, $data) {
 
                     // บันทึก tranferlog_bl
                     $stmt = $conn->prepare("
-                        INSERT INTO tranferlog_y2k (
+                        INSERT INTO tranferlog_bl (
                             phonenumber, amount, date_time, 
                             employee_name, employee_id
                         ) VALUES (
@@ -422,7 +333,7 @@ function process_action($action, $data) {
                         'date_time' => $date_time,
                         'employee_name' => $employee['employee_name'],
                         'employee_id' => $data['employee_id'],
-                        'prefix_wep' => 'y2k',
+                        'prefix_wep' => 'bl',
                         'datalog' => json_encode($result)
                     ]);
 
@@ -465,6 +376,7 @@ function process_action($action, $data) {
                 }
                 throw $e;
             }
+
         default:
             throw new Exception('Invalid action');
     }

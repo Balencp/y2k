@@ -771,15 +771,9 @@
         function getAPIConfig(type) {
             return API_CONFIGS[type] || null;
         }
-        
-        // แก้ไขในส่วน confirmTransfer function
         async function confirmTransfer() {
-            if (isProcessing) {
-                showErrorModal('กำลังดำเนินการอยู่ กรุณารอสักครู่');
-                return;
-            }
-
             const employeeId = document.getElementById('employeeId').value;
+
             if (!employeeId) {
                 showErrorModal('กรุณากรอกรหัสพนักงาน');
                 return;
@@ -790,41 +784,37 @@
                 return;
             }
 
-            // สร้าง unique request ID
-            const requestId = `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+            // เลือก API Config จาก source ของ currentTransferData
+            const selectedAPIType = currentTransferData.source
+                ? currentTransferData.source.api
+                : 'A'; // ค่า default เป็น 'A' หากไม่มี source
+            console.log('Approve URL:', selectedAPIType);
+            const selectedAPI = API_CONFIGS[selectedAPIType];
+
+            if (!selectedAPI) {
+                showErrorModal('ไม่พบการตั้งค่า API ที่ถูกต้อง');
+                return;
+            }
 
             try {
-                isProcessing = true;
                 showLoadingModal();
 
-                // เพิ่ม headers สำหรับ idempotency
-                const headers = {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Request-ID': requestId,
-                    'X-Idempotency-Key': requestId
-                };
-
-                // แปลง FormData เป็น URLSearchParams แทนที่โค้ดเดิม
-                const urlParams = new URLSearchParams();
-                urlParams.append('action', 'transfer');
-                urlParams.append('request_id', requestId);
-                urlParams.append('employee_id', employeeId);
-                urlParams.append('tmn_key_id', currentAccount.tmn_key_id);
-                urlParams.append('mobile_number', currentAccount.mobile_number);
-                urlParams.append('login_token', currentAccount.login_token);
-                urlParams.append('pin', currentAccount.pin);
-                urlParams.append('tmn_id', currentAccount.tmn_id);
-                urlParams.append('payee_wallet_id', currentTransferData.accountNo);
-                urlParams.append('amount', currentTransferData.amount);
+                // 1. ทำการโอนเงิน
+                const formData = new FormData();
+                formData.append('action', 'transfer');
+                formData.append('employee_id', employeeId);
+                formData.append('tmn_key_id', currentAccount.tmn_key_id);
+                formData.append('mobile_number', currentAccount.mobile_number);
+                formData.append('login_token', currentAccount.login_token);
+                formData.append('pin', currentAccount.pin);
+                formData.append('tmn_id', currentAccount.tmn_id);
+                formData.append('payee_wallet_id', currentTransferData.accountNo);
+                formData.append('amount', currentTransferData.amount);
 
                 const response = await fetch('process_transfer.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Request-ID': requestId,
-                        'X-Idempotency-Key': requestId
-                    },
-                    body: urlParams.toString()
+                    body: formData
                 });
 
                 const result = await response.json();
@@ -832,7 +822,6 @@
                 if (result.success) {
                     // 2. หากโอนเงินสำเร็จ ทำการ approve transfer
                     try {
-                        const selectedAPI = API_CONFIGS[currentTransferData.source.api];
                         console.log('Approve URL:', `${selectedAPI.url}/api/admin/transfer/approveManual/${currentTransferData.id}`);
                         const approveResponse = await fetch(
                             `${selectedAPI.url}/api/admin/transfer/approveManual/${currentTransferData.id}`,
@@ -848,6 +837,7 @@
                             }
                         );
 
+                        // Check if the response is not OK
                         if (!approveResponse.ok) {
                             const errorText = await approveResponse.text();
                             console.error('Approve Response Error:', errorText);
@@ -879,8 +869,6 @@
                 hideLoadingModal();
                 showErrorModal(error.message || 'เกิดข้อผิดพลาดในการโอนเงิน');
             } finally {
-                isProcessing = false;
-                hideLoadingModal();
                 hideTransferModal();
             }
         }
