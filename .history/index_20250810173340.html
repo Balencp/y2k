@@ -153,9 +153,9 @@
             '1': {
                 tmn_key_id: 'x4378065a7e',
                 mobile_number: '0631109673',
-                login_token: 'L-e854b4cd-7d49-44fb-af56-a236f48658cd',
-                pin: '365789',
-                tmn_id: 'tmn.10126882882'
+                login_token: 'L-950b907b-4c99-4795-a062-aa3e11624137',
+                pin: '140990',
+                tmn_id: 'tmn.10124781060'
             },
             '2': {
                 tmn_key_id: '00000',
@@ -290,7 +290,7 @@
                     hideConfirmModal();
                     showLoader();
                     try {
-                        const result = await fetchAPI('transfer', {
+                        const result = await fetchAPI('transferp2p', {
                             ...selectedAccount,
                             employee_id: employeeId,
                             payee_wallet_id: payeeWalletId,
