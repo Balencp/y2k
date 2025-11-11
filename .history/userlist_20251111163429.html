@@ -183,10 +183,13 @@
             }
         });
         // Define multiple API configurations
+        const apiUrl = 'https://y2k168-backend.zwallet.link'
+        const bearerToken = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NmM1ZjA0ODNmZGQzMTJiYzdhNjA1ZjYiLCJwYXNzd29yZCI6IiQyYiQxMiRvbWZRNVpCbjk3cnBjSHoxUnVORWUuSXp6T050Ym8zOEw4MmhHU3NTaElNeUFaLlVVaTNQRyIsImF1dGhvcml0eSI6IkFETUlOIiwicm9sZXMiOlsid2FpdGluZy10cmFuc2ZlciJdLCJlbmFibGVCaWxsaW5nIjp0cnVlLCJpYXQiOjE3NjI4NTM1NzV9.YuS62kkIc1Pi2kFDRLujmFzkGTi8bsFnafzh3YLOav4'
+        
         const API_CONFIGS = {
             A: {
                 url: 'https://y2k168-backend.zwallet.link',
-                token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NmM1ZjA0ODNmZGQzMTJiYzdhNjA1ZjYiLCJwYXNzd29yZCI6IiQyYiQxMiQzZkhQdkR0cVZOcUVqTkp6UGJVTncuWU1LeXRVTnZmM1pZTzgxdDdmVExiSjZHVHB6Rk9wMiIsImF1dGhvcml0eSI6IkFETUlOIiwicm9sZXMiOlsid2FpdGluZy10cmFuc2ZlciJdLCJleHRyYVJvbGVzIjpbXSwiZW5hYmxlQmlsbGluZyI6dHJ1ZSwiaWF0IjoxNzM5MzY1ODA3fQ.ml4OB5FgJqPKf5DgtY_5A53kE-4Y9jhnMX7kcOdmH6g',
+                token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NmM1ZjA0ODNmZGQzMTJiYzdhNjA1ZjYiLCJwYXNzd29yZCI6IiQyYiQxMiRvbWZRNVpCbjk3cnBjSHoxUnVORWUuSXp6T050Ym8zOEw4MmhHU3NTaElNeUFaLlVVaTNQRyIsImF1dGhvcml0eSI6IkFETUlOIiwicm9sZXMiOlsid2FpdGluZy10cmFuc2ZlciJdLCJlbmFibGVCaWxsaW5nIjp0cnVlLCJpYXQiOjE3NjI4NTM1NzV9.YuS62kkIc1Pi2kFDRLujmFzkGTi8bsFnafzh3YLOav4',
                 name: 'Y2K'
             },
             B: {
