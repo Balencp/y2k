@@ -322,18 +322,24 @@
 
     <script>
         // Define multiple API configurations
+        // โหลด token จากระบบ token อัตโนมัติ (get_token.php) แทนการฝังค่าไว้
         const API_CONFIGS = {
-            A: {
-                url: 'https://y2k168-backend.zwallet.link',
-                token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NmM1ZjA0ODNmZGQzMTJiYzdhNjA1ZjYiLCJwYXNzd29yZCI6IiQyYiQxMiRvbWZRNVpCbjk3cnBjSHoxUnVORWUuSXp6T050Ym8zOEw4MmhHU3NTaElNeUFaLlVVaTNQRyIsImF1dGhvcml0eSI6IkFETUlOIiwicm9sZXMiOlsid2FpdGluZy10cmFuc2ZlciJdLCJlbmFibGVCaWxsaW5nIjp0cnVlLCJpYXQiOjE3NjI4NTM1NzV9.YuS62kkIc1Pi2kFDRLujmFzkGTi8bsFnafzh3YLOav4',
-                name: 'Y2K'
-            },
-            B: {
-                url: '',
-                token: '..MymgGKTR3-',
-                name: ''
-            }
+            A: { url: '', token: '', name: '' },
+            B: { url: '', token: '', name: '' }
         };
+        let _walletCfgPromise = null;
+        function loadWalletConfig() {
+            if (_walletCfgPromise) return _walletCfgPromise;
+            _walletCfgPromise = (async () => {
+                try {
+                    const res = await fetch('get_token.php', { credentials: 'same-origin', cache: 'no-store' });
+                    const cfg = await res.json();
+                    API_CONFIGS.A = { url: cfg.url || '', token: cfg.token || '', name: cfg.name || 'Y2K' };
+                    if (!cfg.token) console.warn('ยังไม่มี token จาก get_token.php');
+                } catch (e) { console.error('โหลด token ไม่สำเร็จ:', e); }
+            })();
+            return _walletCfgPromise;
+        }
         let currentWithdrawal = null;
         // เพิ่มฟังก์ชันตรวจสอบระบบค้าง
         let processingTimeout;
@@ -1322,7 +1328,8 @@
         });
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', async function () {
+            await loadWalletConfig();
             refreshData();
             // Start timer
             setInterval(updateTimer, 1000);
